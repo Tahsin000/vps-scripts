@@ -36,7 +36,7 @@ local/open-db-tunnel.sh             # run on local PC to open SSH tunnel
 Login to your server first:
 
 ```bash
-ssh root@YOUR_VPS_IP
+ssh root@YOUR_VPS_IPV4
 ```
 
 Install git if needed:
@@ -90,6 +90,24 @@ Review/edit config:
 ```bash
 nano /root/managed-db.env
 ```
+
+Security warning (must do before step `01`):
+- You must change all sensitive password values in `/root/managed-db.env` at your own risk.
+- Minimum required password fields to review/change:
+  - `APP_PASS`
+  - `ADMIN_PASS`
+  - `BACKUP_PASS`
+  - `MONITOR_PASS`
+  - `DB_UI_BASIC_PASS`
+- Also review usernames and secrets:
+  - `APP_USER`
+  - `ADMIN_USER`
+  - `BACKUP_USER`
+  - `MONITOR_USER`
+  - `DB_UI_BASIC_USER`
+  - `ADMINER_FILE`
+- If you keep predictable, weak, reused, or leaked credentials, your server can be hacked.
+- Rohana will never take responsibility for any security incident, data loss, or damage caused by unsafe password handling or poor secret management.
 
 ### Step 01: Bootstrap server
 
@@ -194,33 +212,76 @@ grep -E 'DB_NAME|APP_USER|APP_PASS|ADMIN_USER|ADMIN_PASS|ADMINER_FILE|DB_UI_BASI
 
 ---
 
-## 5) Access Adminer from Local PC
+## 5) After Successful Setup: Local Access (Adminer + TablePlus)
 
-From your local machine:
+When all scripts (`00` to `05`) complete successfully, run these commands from your local PC so you can access the DB website (Adminer) and TablePlus from localhost.
 
-```bash
-bash local/open-db-tunnel.sh YOUR_VPS_IP ~/.ssh/YOUR_KEY root
-```
+### 5.1 Adminer tunnel (website access)
 
-Or manually:
+Run:
 
 ```bash
-ssh -i ~/.ssh/YOUR_KEY \
-  -L 8088:127.0.0.1:8088 \
-  -L 3307:127.0.0.1:3306 \
-  root@YOUR_VPS_IP
+ssh -i ~/.ssh/YOUR_SSH_KEY -L 8088:127.0.0.1:8088 root@YOUR_VPS_IPV4
 ```
 
-Find Adminer filename on VPS:
+Keep this terminal open.
+
+Get Adminer filename on VPS:
+
+```bash
+cat /root/adminer-filename.txt
+```
+
+If that file is not present, use:
 
 ```bash
 grep ADMINER_FILE /root/managed-db.env
 ```
 
-Then open locally:
+Open in local browser:
 
 ```text
 http://127.0.0.1:8088/<ADMINER_FILE>
+```
+
+### 5.2 TablePlus tunnel (MySQL access)
+
+Option 1: Separate SSH tunnel for TablePlus
+
+Run this in your local PC terminal:
+
+```bash
+ssh -i ~/.ssh/YOUR_SSH_KEY -L 3307:127.0.0.1:3306 root@YOUR_VPS_IPV4
+```
+
+Keep this terminal open.
+
+Then in TablePlus, use this MySQL connection (app user):
+
+```text
+Host: 127.0.0.1
+Port: 3307
+User: app_user
+Password: <APP_PASS from /root/managed-db.env>
+Database: app_db
+```
+
+If admin user is needed:
+
+```text
+Host: 127.0.0.1
+Port: 3307
+User: admin_user
+Password: <ADMIN_PASS from /root/managed-db.env>
+Database: app_db
+```
+
+TablePlus will connect to localhost, and SSH tunnel will securely forward traffic to VPS MySQL at `127.0.0.1:3306`.
+
+### 5.3 Optional combined tunnel (Adminer + TablePlus together)
+
+```bash
+bash local/open-db-tunnel.sh YOUR_VPS_IPV4 ~/.ssh/YOUR_SSH_KEY root
 ```
 
 ---
@@ -228,7 +289,7 @@ http://127.0.0.1:8088/<ADMINER_FILE>
 ## 6) Suggestions for Better Output
 
 1. Take a snapshot/backup of the VPS before running scripts.
-2. Edit `/root/managed-db.env` after step `00` (timezone, DB name, memory values).
+2. Edit `/root/managed-db.env` after step `00` and rotate all password fields before any production use.
 3. Keep at least 1 GB RAM or enable swap for smoother MySQL behavior.
 4. Keep SSH key login enabled and disable password login in SSH for stronger security.
 5. Do not open MySQL publicly (`ufw allow 3306` should not be used).
@@ -237,7 +298,15 @@ http://127.0.0.1:8088/<ADMINER_FILE>
 
 ---
 
-## 7) Troubleshooting Quick Checks
+## 7) Responsibility Disclaimer
+
+- You are fully responsible for changing and protecting all passwords/secrets in `/root/managed-db.env`.
+- Running this kit with unsafe/default credentials is done at your own risk.
+- If an attacker compromises your server because of weak credential management, Rohana will never take responsibility for that incident.
+
+---
+
+## 8) Troubleshooting Quick Checks
 
 Check services:
 
