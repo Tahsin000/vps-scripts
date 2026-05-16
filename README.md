@@ -355,3 +355,44 @@ Check firewall:
 ```bash
 ufw status verbose
 ```
+
+If `01-server-bootstrap.sh` fails with:
+
+```text
+E: Sub-process /usr/bin/dpkg returned an error code (1)
+```
+
+Run recovery:
+
+```bash
+dpkg --configure -a
+apt -f install -y
+apt update
+```
+
+On very small VPS (for example `512MB` RAM), ensure swap is active before retry:
+
+```bash
+swapon --show
+free -h
+```
+
+If `02-mysql-managed-setup.sh` fails with `mysql.service failed`, inspect:
+
+```bash
+systemctl status mysql.service --no-pager -l
+journalctl -xeu mysql.service --no-pager | tail -n 120
+```
+
+For low-memory VPS, reduce MySQL memory in `/root/managed-db.env` then rerun step `02`:
+
+```bash
+MYSQL_BUFFER_POOL_SIZE="128M"
+MYSQL_MAX_CONNECTIONS="40"
+```
+
+If your VPS is running MariaDB-compatible packages, set:
+
+```bash
+DB_COLLATION="utf8mb4_general_ci"
+```

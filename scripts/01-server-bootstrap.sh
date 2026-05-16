@@ -30,6 +30,27 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 
+# Add swap on very small VPS before package installation to reduce OOM failures.
+if [[ "${ENABLE_SWAP}" == "1" ]] && ! swapon --show | grep -q '/swapfile'; then
+  echo "Creating swapfile early: $SWAP_SIZE"
+  if ! fallocate -l "$SWAP_SIZE" /swapfile; then
+    # Fallback for filesystems where fallocate is unavailable.
+    SWAP_MB="$(( ( $(numfmt --from=iec "$SWAP_SIZE") + 1048575 ) / 1048576 ))"
+    dd if=/dev/zero of=/swapfile bs=1M count="$SWAP_MB" status=progress
+  fi
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
+# Repair interrupted package state from previous failed runs.
+if dpkg --audit | grep -q .; then
+  echo "Detected interrupted dpkg state, repairing..."
+  dpkg --configure -a
+  apt -f install -y
+fi
+
 apt update
 apt install -y \
   mysql-server mysql-client \
@@ -39,19 +60,6 @@ apt install -y \
 
 # Set timezone for predictable backup timestamps and DB default timezone.
 timedatectl set-timezone "$TIMEZONE"
-
-# Add swap on very small VPS, only when not already present.
-if [[ "${ENABLE_SWAP}" == "1" ]] && ! swapon --show | grep -q '/swapfile'; then
-  echo "Creating swapfile: $SWAP_SIZE"
-  if ! fallocate -l "$SWAP_SIZE" /swapfile; then
-    # Fallback for filesystems where fallocate is unavailable.
-    dd if=/dev/zero of=/swapfile bs=1M count=1024 status=progress
-  fi
-  chmod 600 /swapfile
-  mkswap /swapfile
-  swapon /swapfile
-  grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
-fi
 
 # Enable core services.
 systemctl enable --now mysql

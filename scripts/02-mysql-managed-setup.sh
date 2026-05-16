@@ -28,6 +28,8 @@ fi
 # shellcheck disable=SC1090
 source "$CONFIG_FILE"
 
+DB_COLLATION="${DB_COLLATION:-utf8mb4_0900_ai_ci}"
+
 # Validate identifiers before placing them in SQL.
 for ident in "$DB_NAME" "$APP_USER" "$ADMIN_USER" "$BACKUP_USER" "$MONITOR_USER"; do
   if [[ ! "$ident" =~ ^[A-Za-z0-9_]+$ ]]; then
@@ -54,7 +56,7 @@ symbolic-links = 0
 
 # UTF-8 defaults for Laravel/PHP/WordPress.
 character-set-server = utf8mb4
-collation-server = utf8mb4_0900_ai_ci
+collation-server = ${DB_COLLATION}
 
 # Bangladesh timezone.
 default-time-zone = '+06:00'
@@ -75,7 +77,16 @@ max_connections = ${MYSQL_MAX_CONNECTIONS}
 innodb_buffer_pool_size = ${MYSQL_BUFFER_POOL_SIZE}
 EOF_MYSQL
 
-systemctl restart mysql
+if ! systemctl restart mysql; then
+  echo "MySQL failed to restart after writing $MYSQL_CONF"
+  echo
+  echo "Recent mysql.service logs:"
+  journalctl -xeu mysql.service --no-pager | tail -n 80 || true
+  echo
+  echo "Service status:"
+  systemctl status mysql.service --no-pager -l || true
+  exit 1
+fi
 
 # Create DB and users. Passwords come from /root/managed-db.env.
 # Note: base64-generated passwords do not include single quotes, so SQL quoting is safe here.
@@ -88,7 +99,7 @@ DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.
 
 CREATE DATABASE IF NOT EXISTS ${DB_NAME}
   CHARACTER SET utf8mb4
-  COLLATE utf8mb4_0900_ai_ci;
+  COLLATE ${DB_COLLATION};
 
 -- Application user: use this from Laravel/PHP/WordPress.
 CREATE USER IF NOT EXISTS '${APP_USER}'@'localhost' IDENTIFIED BY '${APP_PASS}';
