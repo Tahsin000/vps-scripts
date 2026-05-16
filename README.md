@@ -31,6 +31,13 @@ local/open-db-tunnel.sh             # run on local PC to open SSH tunnel
 
 ---
 
+## Related Documentation
+
+- [Nginx External Access Troubleshooting](docs/nginx-external-access-troubleshooting.md)
+  - Use this when `curl` works inside VPS but public IP access fails from outside.
+
+---
+
 ## 1) Clone on the VPS (Recommended)
 
 Login to your server first:
