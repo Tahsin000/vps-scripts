@@ -59,6 +59,9 @@ MONITOR_PASS="$(rand_pass)"
 
 # Backup automation
 BACKUP_DIR="/var/backups/mysql"
+# Keep newest N backups (minimum 1). Older files are deleted after each new backup.
+BACKUP_RETENTION_COUNT="2"
+# Legacy fallback for older backup script versions that still use day-based cleanup.
 BACKUP_RETENTION_DAYS="7"
 BACKUP_CRON_TIME="0 2 * * *"
 

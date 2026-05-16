@@ -6,7 +6,7 @@ set -euo pipefail
 #   - Daily cron backup
 #   - gzip compressed SQL dumps
 #   - sha256 checksum
-#   - local retention cleanup
+#   - local retention cleanup (keep newest N backups)
 #   - restore helper script
 #
 # Important:
@@ -82,8 +82,29 @@ mysqldump \
 
 sha256sum "$OUT_FILE" > "${OUT_FILE}.sha256"
 
-find "$BACKUP_DIR" -type f -name "*.sql.gz" -mtime +"$BACKUP_RETENTION_DAYS" -delete
-find "$BACKUP_DIR" -type f -name "*.sha256" -mtime +"$BACKUP_RETENTION_DAYS" -delete
+# Prefer count-based retention so disk usage stays predictable on small VPS nodes.
+if [[ -n "${BACKUP_RETENTION_COUNT:-}" ]]; then
+  if ! [[ "$BACKUP_RETENTION_COUNT" =~ ^[0-9]+$ ]] || [[ "$BACKUP_RETENTION_COUNT" -lt 1 ]]; then
+    echo "Invalid BACKUP_RETENTION_COUNT='$BACKUP_RETENTION_COUNT' (must be integer >= 1)"
+    exit 1
+  fi
+
+  mapfile -t BACKUP_FILES < <(
+    find "$BACKUP_DIR" -maxdepth 1 -type f -name "${DB_TO_BACKUP}_*.sql.gz" -printf '%f\n' | sort -r
+  )
+
+  if [[ "${#BACKUP_FILES[@]}" -gt "$BACKUP_RETENTION_COUNT" ]]; then
+    for OLD_FILE in "${BACKUP_FILES[@]:$BACKUP_RETENTION_COUNT}"; do
+      OLD_PATH="${BACKUP_DIR}/${OLD_FILE}"
+      rm -f -- "$OLD_PATH" "${OLD_PATH}.sha256"
+      echo "Pruned old backup: $OLD_PATH"
+    done
+  fi
+else
+  # Backward-compatible fallback for older config files that only define day-based retention.
+  find "$BACKUP_DIR" -type f -name "*.sql.gz" -mtime +"$BACKUP_RETENTION_DAYS" -delete
+  find "$BACKUP_DIR" -type f -name "*.sha256" -mtime +"$BACKUP_RETENTION_DAYS" -delete
+fi
 
 echo "Backup created: $OUT_FILE"
 EOF_BACKUP
@@ -135,10 +156,17 @@ systemctl restart cron
 # Run first backup now to verify everything works.
 "$BACKUP_SCRIPT" "$DB_NAME"
 
+if [[ -n "${BACKUP_RETENTION_COUNT:-}" ]]; then
+  RETENTION_STATUS="keep newest ${BACKUP_RETENTION_COUNT} backup(s)"
+else
+  RETENTION_STATUS="legacy day-based cleanup (${BACKUP_RETENTION_DAYS} day(s))"
+fi
+
 cat <<EOF_STATUS
 
 Backup automation complete.
 Backup dir:     $BACKUP_DIR
+Retention:      $RETENTION_STATUS
 Cron file:      $CRON_FILE
 Backup script:  $BACKUP_SCRIPT
 Restore script: $RESTORE_SCRIPT

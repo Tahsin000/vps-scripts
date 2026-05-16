@@ -131,6 +131,12 @@ Applies local-only MySQL security, creates DB/users, enables logs.
 bash 03-backup-automation.sh
 ```
 
+Why retention exists:
+- Small VPS/droplets have limited disk.
+- MySQL backups keep growing over time.
+- Without retention, backups can fill the disk and cause database/app failures.
+- This kit keeps only the newest backups so storage stays predictable.
+
 Backup location:
 
 ```bash
@@ -154,6 +160,30 @@ Restore:
 ```bash
 mysql-restore.sh /var/backups/mysql/app_db_YYYY-MM-DD_HH-MM-SS.sql.gz
 ```
+
+Backup retention configuration (`/root/managed-db.env`):
+
+```bash
+# Keep newest N backups (minimum 1)
+BACKUP_RETENTION_COUNT="2"
+```
+
+If your existing `/root/managed-db.env` was created before this field existed, add it manually to enable count-based retention.
+
+Retention behavior:
+- A new backup is created first.
+- Then older backups beyond `BACKUP_RETENTION_COUNT` are deleted automatically.
+- Minimum value is `1`.
+
+Examples:
+- `BACKUP_RETENTION_COUNT="1"` -> keep only the latest backup file.
+- `BACKUP_RETENTION_COUNT="2"` -> keep the latest 2 backups (recommended for very small VPS).
+- `BACKUP_RETENTION_COUNT="3"` -> keep the latest 3 backups.
+
+Recommended values:
+- Minimum: `1` (best for tiny disk, but no rollback depth)
+- Common safe default: `2`
+- Safer rollback window: `3` (if disk allows)
 
 ### Step 04: Setup Adminer secure UI
 
